@@ -75,7 +75,7 @@
    Case Study Questions
    --------------------*/
 
--- 1. What is the total amount each customer spent at the restaurant?
+-- 1. What is the total amount each customer spent at the restaurant? ok
 SELECT s.customer_id, SUM(m.price) AS total_amount
 FROM sales AS s
 JOIN menu AS m
@@ -84,16 +84,28 @@ GROUP BY customer_id
 GO
 
 
--- 2. How many days has each customer visited the restaurant?
-SELECT customer_id, COUNT(DISTINCT(order_date)) as visit
+-- 2. How many days has each customer visited the restaurant? ok
+SELECT customer_id, COUNT(DISTINCT(order_date)) AS visit
 FROM sales
 GROUP BY customer_id
 GO
 
 
--- 3. What was the first item from the menu purchased by each customer?
+-- 3. What was the first item from the menu purchased by each customer? ok
+WITH first_order AS (
+SELECT s.customer_id,m.product_name,(s.order_date),
+		DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY S.order_date) AS RANK
+FROM sales AS s
+JOIN menu AS m
+ON s.product_id = m.product_id
+)
+SELECT customer_id, product_name
+FROM first_order 
+WHERE RANK = 1
+GROUP BY customer_id, product_name
+GO
 
--- 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
+-- 4. What is the most purchased item on the menu and how many times was it purchased by all customers? OK
 SELECT m.product_id, COUNT(s.product_id) AS "most purchased"
 FROM sales AS s
 JOIN menu AS m
@@ -102,18 +114,48 @@ GROUP BY m.product_id
 GO
 
 
--- 5. Which item was the most popular for each customer?
-SELECT customer_id , MAX(product_id) AS "most popular"
+-- 5. Which item was the most popular for each customer? OK
+SELECT customer_id , MAX(product_id) AS "most popular item"
 FROM sales
 GROUP BY customer_id
 GO
 
 
--- 6. Which item was purchased first by the customer after they became a member?
-SELECT s.customer_id, count(s.order_date) AS "first purchas after member"
+-- 6. Which item was purchased first by the customer after they became a member? OK
+WITH member_sales_cte AS 
+(
+ SELECT s.customer_id, m.join_date, s.order_date,   s.product_id,
+         DENSE_RANK() OVER(PARTITION BY s.customer_id
+  ORDER BY s.order_date) AS rank
+     FROM sales AS s
+ JOIN members AS m
+  ON s.customer_id = m.customer_id
+ WHERE s.order_date >= m.join_date
+)
+SELECT s.customer_id, s.order_date, m2.product_name 
+FROM member_sales_cte AS s
+JOIN menu AS m2
+ ON s.product_id = m2.product_id
+WHERE rank = 1;
+
+
+-- 7. Which item was purchased just before the customer became a member?
+--کدام کالا درست قبل از عضویت مشتری خریداری شده است؟
+SELECT s.customer_id, count(s.product_id), count(s.order_date) AS "purchased just before member"
 FROM sales AS s
 JOIN members AS m
 ON s.customer_id = m.customer_id
-WHERE  s.order_date >= m.join_date
+WHERE s.order_date < m.join_date 
+order BY s.customer_id
+
+-- 8. What is the total items and amount spent for each member before they became a member? OK
+SELECT s.customer_id, SUM(m.price) AS "total amount" ,count(m.product_id) AS "total item"
+FROM sales AS s
+JOIN menu AS m
+ON s.product_id =  m.product_id
+JOIN members AS me
+ON s.customer_id = me.customer_id
+WHERE  s.order_date < me.join_date
 GROUP BY s.customer_id
 GO
+
