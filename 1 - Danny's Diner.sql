@@ -105,6 +105,7 @@ WHERE RANK = 1
 GROUP BY customer_id, product_name
 GO
 
+
 -- 4. What is the most purchased item on the menu and how many times was it purchased by all customers? OK
 SELECT m.product_id, COUNT(s.product_id) AS "most purchased"
 FROM sales AS s
@@ -114,12 +115,21 @@ GROUP BY m.product_id
 GO
 
 
--- 5. Which item was the most popular for each customer? OK
-SELECT customer_id , MAX(product_id) AS "most popular item"
-FROM sales
-GROUP BY customer_id
-GO
 
+-- 5. Which item was the most popular for each customer? OK
+WITH popular_item AS
+(
+SELECT s.customer_id, m.product_name,
+DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY count(s.customer_id) DESC) AS rank
+FROM sales AS s
+JOIN menu AS m
+ON s.product_id = m.product_id
+GROUP BY s.customer_id , m.product_name
+)
+SELECT customer_id , product_name
+FROM popular_item 
+WHERE rank = 1
+GO
 
 -- 6. Which item was purchased first by the customer after they became a member? OK
 WITH member_sales_cte AS 
@@ -137,16 +147,26 @@ FROM member_sales_cte AS s
 JOIN menu AS m2
  ON s.product_id = m2.product_id
 WHERE rank = 1;
+GO
 
+-- 7. Which item was purchased just before the customer became a member? OK
+WITH purchased_before_member AS 
+(
+ SELECT s.customer_id, m.join_date, s.order_date, s.product_id,
+         DENSE_RANK() OVER(PARTITION BY s.customer_id
+         ORDER BY s.order_date DESC) AS rank
+ FROM sales AS s
+ JOIN members AS m
+  ON s.customer_id = m.customer_id
+ WHERE s.order_date < m.join_date
+)
+SELECT s.customer_id, s.order_date, m2.product_name 
+FROM purchased_before_member AS s
+JOIN menu AS m2
+ ON s.product_id = m2.product_id
+WHERE rank = 1
+GO
 
--- 7. Which item was purchased just before the customer became a member?
---کدام کالا درست قبل از عضویت مشتری خریداری شده است؟
-SELECT s.customer_id, count(s.product_id), count(s.order_date) AS "purchased just before member"
-FROM sales AS s
-JOIN members AS m
-ON s.customer_id = m.customer_id
-WHERE s.order_date < m.join_date 
-order BY s.customer_id
 
 -- 8. What is the total items and amount spent for each member before they became a member? OK
 SELECT s.customer_id, SUM(m.price) AS "total amount" ,count(m.product_id) AS "total item"
